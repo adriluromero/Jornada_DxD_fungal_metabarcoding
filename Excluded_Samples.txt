@@ -54,7 +54,7 @@ sample ID             Step where it was excluded
 96_S96                During filtering of sequences.
 
 
-Part 3) Samples excluded during manual curation of the 'otu.tax.table.csv' file.
+Part 3) Samples excluded during manual curation of the 'otu.tax.table.csv' file:
 
 sample ID            Reason  
 104_S104             Lack of sequences.   
