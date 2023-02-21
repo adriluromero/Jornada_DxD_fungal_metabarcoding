@@ -1,0 +1,156 @@
+#Jornada_DxD_Fungal_Metabarcoding
+
+#Protocol for processing Metabarcoding of soil
+#Section 2
+#File name: 2_Extract_ITS2_region
+#Step: Use QIIME2 to extract the ITS2 region from the paired-end sequences.
+
+#In this script, you will: 
+# 1. Create a manifest file for downstream analyses of sequencing data with QIIME2 version 2021.11.0.
+# 2. Import each paired-end sequence using QIIME2. Check the per-sample sequence counts.
+# 3. Extract the ITS2 region from each paired-end sequence using the QIIME2 itsxpress plug-in.
+# 4. Export the ITS extracted files for downstream analysis with dada2.
+# 5. After trimming and exporting, examine the per-sample sequence counts in the 'trimmed_exact_ITS2_reverse_Dec13.qza' file.
+# 6. Create the directories to use in the dada2 step, and move the files accordingly. 
+
+#Memory requirements for bash script: 
+#--cpus-per-task=20 ##The number of threads the code will use
+#--mem-per-cpu=10G  ## Real memory(MB) per CPU required by the job.
+
+
+#1. Create a manifest file for downstream analyses of sequencing data with QIIME2 version 2021.11.0. 
+
+#To make a manifest file we need the file location for each forward and reverse sequencing files. 
+
+#Find and save into a .txt file the file path to each forward (R1) & reverse (R2) sequence in the directory.
+
+find /fs1/project/egcc/fastq.gz/*L001_R1*.fastq.gz -type f > Forwardlist.txt
+
+find /fs1/project/egcc/fastq.gz/*L001_R2*.fastq.gz -type f > Reverselist.txt
+
+#Download the 'Forwardlist.txt' and 'Reverselist.txt' files into your local PC. 
+#Open a new Excel spreadsheet and label the first 3 columns as 'sample-id', 'forward-absolute-filepath', and 'reverse-absolute-filepath'. 
+#Paste the file paths from the 'Forwardlist.txt' and 'Reverselist.txt' files into its respective column. 
+#Write in the sample ID for each paired-end sequence. After 3 rows, Excel will automatically fill in the rest of the column. Make sure that the sample ID matches the forward and reverse columns.
+
+#Delete the following samples from the manifest file:
+#Undetermined_S0_L001_R1_001.fastq.gz
+#Undetermined_S0_L001_R2_001.fastq.gz
+
+#Save the manifest file as 'original-manifest-file.txt' (tab delimited) in Excel. Once saved, change the file extension to *.tsv
+
+##Example of Manifest file: 
+
+#sample-id	forward-absolute-filepath	                                        reverse-absolute-filepath
+100_S100	/fs1/project/egcc/fastq.gz/GSF3045-100_S100_L001_R1_001.fastq.gz	/fs1/project/egcc/fastq.gz/GSF3045-100_S100_L001_R2_001.fastq.gz
+101_S101	/fs1/project/egcc/fastq.gz/GSF3045-101_S101_L001_R1_001.fastq.gz	/fs1/project/egcc/fastq.gz/GSF3045-101_S101_L001_R2_001.fastq.gz
+102_S102	/fs1/project/egcc/fastq.gz/GSF3045-102_S102_L001_R1_001.fastq.gz	/fs1/project/egcc/fastq.gz/GSF3045-102_S102_L001_R2_001.fastq.gz
+103_S103	/fs1/project/egcc/fastq.gz/GSF3045-103_S103_L001_R1_001.fastq.gz	/fs1/project/egcc/fastq.gz/GSF3045-103_S103_L001_R2_001.fastq.gz
+104_S104	/fs1/project/egcc/fastq.gz/GSF3045-104_S104_L001_R1_001.fastq.gz	/fs1/project/egcc/fastq.gz/GSF3045-104_S104_L001_R2_001.fastq.gz
+
+#As you can see, the paths to the forward and reverve files for each sample is listed in the Manifest file. 
+
+echo "Use the manifest file to import the sequences into the qiime2 conda environment for downstream analyses."
+  
+#2. Import each paired-end sequence using QIIME2. Check the per-sample sequence counts.
+
+#Load the 'qiime2_2021_11-custom' conda environment.
+
+module load conda
+conda activate /fs1/project/egcc/conda_env/qiime2_2021_11-custom
+
+#Make a directory where the output will go.
+
+mkdir /fs1/project/egcc/ITSextracted
+
+echo "Import the paired-end sequences using the manifest file."
+
+qiime tools import \
+--type 'SampleData[PairedEndSequencesWithQuality]' \
+--input-path /fs1/project/egcc/fastq.gz/original-manifest-file.tsv \
+--output-path /fs1/project/egcc/ITSextracted/paired_end_demux_reverse.qza \
+--input-format PairedEndFastqManifestPhred33V2
+
+#If this runs well, then your sequences were imported and you will have a 'paired_end_demux_reverse.qza' file.
+
+#Before trimming, examine the per-sample sequence counts in the 'paired_end_demux_reverse.qza' file.
+#This is critical as it will show if there are samples with low sequence counts to exclude. 
+#If you do not exclude low count sequences you will get a "file too small" error when extracting the ITS2 region.
+
+#First, create a .qzv file. 
+
+qiime demux summarize \
+--i-data /fs1/project/egcc/ITSextracted/paired_end_demux_reverse.qza \
+--o-visualization /fs1/project/egcc/ITSextracted/paired_end_demux_reverse.qzv
+
+#Download the 'paired_end_demux_reverse.qzv' output file into the local PC.
+#Upload and view the 'paired_end_demux_reverse.qzv' file on https://view.qiime2.org 
+
+#The visualization of 'paired_end_demux_reverse.qzv' shows several samples with low sequence counts. 
+#Download the 'Per-sample sequence counts' table and sort from low to high values.
+#From the manifest file remove samples with low per sequence counts. 
+#Save the file as 'manifest_file_good_pair_reads.tsv'.
+#Refer to the file 'Excluded_Samples' for a list of the 40 samples excluded. 
+
+#Repeat the import step using the new manifest file with the excluded samples.
+
+qiime tools import \
+--type 'SampleData[PairedEndSequencesWithQuality]' \
+--input-path /fs1/project/egcc/fastq.gz/manifest_file_good_pair_reads.tsv \
+--output-path /fs1/project/egcc/ITSextracted/paired_end_demux_reverse_feb8.qza \
+--input-format PairedEndFastqManifestPhred33V2
+
+#If this runs well, then your sequences were imported and you will have a 'paired_end_demux_reverse_feb8.qza' file.
+
+#3. Extract the ITS2 region from each paired-end sequence using the QIIME2 itsxpress plug-in.
+
+qiime itsxpress trim-pair-output-unmerged \
+--i-per-sample-sequences /fs1/project/egcc/ITSextracted/paired_end_demux_reverse_feb8.qza \
+--p-region ITS2 \
+--p-taxa F \
+--p-reversed-primers \
+--p-cluster-id 1.0 \
+--p-threads 3 \
+--o-trimmed trimmed_exact_ITS2_reverse_feb8.qza \
+--verbose
+
+#These paired-end sequences are reversed, so the '--p-reversed-primers' flag is included. 
+#If your primers are not reversed then ommit this flag. 
+#Your output file name is set in the '--o-trimmed' flag.
+
+#4. Export the trimmed paired-end sequences for downstream analysis with dada2.
+
+qiime tools export \
+--input-path /fs1/project/egcc/trimmed_exact_ITS2_reverse_feb8.qza \
+--output-path /fs1/project/egcc/ITS_extracted_sequences
+
+#5. After trimming and exporting, examine the per-sample sequence counts in the 'trimmed_exact_ITS2_reverse_feb8.qza' file.
+
+#First, create a .qzv file. 
+
+qiime demux summarize \
+--i-data /fs1/project/egcc/trimmed_exact_ITS2_reverse_feb8.qza \
+--o-visualization /fs1/project/egcc/trimmed_exact_ITS2_reverse_feb8.qzv
+
+#Then, download the 'trimmed_exact_ITS2_reverse_feb8.qzv' output file into the local PC.
+#Upload and view the 'trimmed_exact_ITS2_reverse_feb8.qzv' file on https://view.qiime2.org
+
+#Optional. Keep a copy of this report as it has information on per-sample sequence counts post-trimming.
+
+#6. Create the directories to use in the dada2 step, and move the files accordingly. 
+
+mkdir /fs1/project/egcc/dada2
+
+#For the forward reads:
+mkdir /fs1/project/egcc/dada2/Read_1_ITSx
+
+#For the reverse reads:
+mkdir /fs1/project/egcc/dada2/Read_2_ITSx
+
+#Copy and paste the R1 or forward sequences into the 'Read_1_ITSx' directory. 
+cp /fs1/project/egcc/ITS_extracted_sequences/*L001_R1*.fastq.gz /fs1/project/egcc/dada2/Read_1_ITSx
+
+#Copy and paste the R2 or reverse sequences into the 'Read_2_ITSx' directory. 
+cp /fs1/project/egcc/ITS_extracted_sequences/*L001_R2*.fastq.gz /fs1/project/egcc/dada2/Read_2_ITSx
+
+conda deactivate
