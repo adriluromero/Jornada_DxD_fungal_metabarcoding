@@ -126,7 +126,7 @@ inv2 <- multipatt(rel_com, location, func = "r.g", control = how(nperm = 9999))
 summary(inv2)
 
 #Multilevel pattern analysis
----------------------------
+#---------------------------
   
 #  Association function: r.g
 #Significance level (alpha): 0.05
