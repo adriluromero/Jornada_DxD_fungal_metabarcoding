@@ -52,8 +52,8 @@ sample ID 	forward sequence count 	reverse sequence count 
 
 Part 2)
 
-Samples excluded in the '4_Taxonomic_tables.R' step:
----------------------------------------------------------------
+Samples excluded in the '4_Taxonomic_tables.R' step due to no sequences:
+------------------------------------------------------------------------
 sample ID             Step where it was excluded
 96_S96                During filtering of sequences.
 
