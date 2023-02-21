@@ -12,7 +12,7 @@ library(vegan)
 library(funrar) #For relative abundance
 library(ggplot2)
 
-#Import the 'otu.tables.clean.csv' file. You can find in this repository. 
+#Import the 'otu.tables.clean.csv' file. You can find it in this repository. 
 otu.clean <- read.csv("/project/egcc/stats/csv/otu.tables.clean.csv", row.names = 1)
 
 #Select only the columns with the ASV data.
