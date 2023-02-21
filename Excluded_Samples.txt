@@ -1,0 +1,62 @@
+#Jornada_DxD_Fungal_Metabarcoding
+
+#Protocol for processing Metabarcoding of soil
+#File name: Excluded_Samples
+
+Part 1) Samples excluded in the '2_Extract_ITS2_region' step due to low sequence count:
+
+sample ID 	forward sequence count 	reverse sequence count 
+  92_S92 	0 	                    0 
+    2_S2 	0 	                    0 
+148_S148 	0 	                    0 
+165_S165 	1 	                    1 
+164_S164 	1 	                    1 
+161_S161 	3 	                    3 
+158_S158 	4 	                    4 
+163_S163 	4 	                    4 
+  82_S82 	6 	                    6 
+162_S162 	6 	                    6 
+157_S157 	6 	                    6 
+155_S155 	8 	                    8 
+172_S172 	8 	                    8 
+156_S156 	10 	                    10 
+159_S159 	19                   	19 
+  93_S93 	23                  	23 
+175_S175 	26 	                    26 
+176_S176 	32 	                    32 
+166_S166 	33 	                    33 
+160_S160 	46 	                    46 
+169_S169 	52                   	52 
+174_S174 	54                     	54 
+171_S171 	59 	                    59 
+173_S173 	70 	                    70 
+170_S170 	75 	                    75 
+167_S167 	76 	                    76 
+168_S168 	80 	                    80 
+  50_S50 	91                  	91 
+127_S127 	97 	                    97 
+  61_S61 	98 	                    98 
+138_S138 	115 	                115 
+  49_S49 	125 	                125 
+  34_S34 	176 	                176 
+  60_S60 	190 	                190 
+    5_S5 	361 	                361 
+  71_S71 	443 	                443 
+  39_S39 	641 	                641 
+137_S137 	804 	                804 
+  35_S35 	1119 	                1119 
+  38_S38 	9171 	                9171 
+
+
+Part 2) Samples excluded in the '4_Taxonomic_tables.R' step due to no sequences:
+
+sample ID             Step where it was excluded
+96_S96                During filtering of sequences.
+
+
+Part 3) Samples excluded during manual curation of the 'otu.tax.table.csv' file.
+
+sample ID            Reason  
+104_S104             Lack of sequences.   
+126_S126             Lack of sequences.
+36_S36               Lack of sequences.
