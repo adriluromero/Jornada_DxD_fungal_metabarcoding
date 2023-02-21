@@ -8,7 +8,7 @@ Part 1)
 Samples excluded in the '2_Extract_ITS2_region' step: 
 ------------------------------------------------------------
 sample ID 	forward sequence count 	reverse sequence count 
-92_S92 	    0 	                    0 
+92_S92 	      0 	                    0 
 2_S2 	    0 	                    0 
 148_S148 	0 	                    0 
 165_S165 	1 	                    1 
@@ -16,14 +16,14 @@ sample ID 	forward sequence count 	reverse sequence count 
 161_S161 	3 	                    3 
 158_S158 	4 	                    4 
 163_S163 	4 	                    4 
-82_S82 	    6 	                    6 
+82_S82 	      6 	                    6 
 162_S162 	6 	                    6 
 157_S157 	6 	                    6 
 155_S155 	8 	                    8 
 172_S172 	8 	                    8 
 156_S156 	10 	                    10 
 159_S159 	19                   	19 
-93_S93 	    23                  	23 
+93_S93 	      23                  	23 
 175_S175 	26 	                    26 
 176_S176 	32 	                    32 
 166_S166 	33 	                    33 
