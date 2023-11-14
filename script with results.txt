@@ -172,6 +172,67 @@ Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’
 ##Unexplained variance 82%
 
 
+######################### Beta diversity ######################################
+
+betadisper(vegdist(ASV_PERMANOVA), interaction(ENV.MATRIX$treatment,ENV.MATRIX$location))
+
+
+Homogeneity of multivariate dispersions
+
+Call: betadisper(d = vegdist(ASV_PERMANOVA), group = interaction(ENV.MATRIX$treatment, ENV.MATRIX$location))
+
+No. of Positive Eigenvalues: 61
+No. of Negative Eigenvalues: 10
+
+Average distance to median:
+   control .interspace disturbance.interspace     drought.interspace         DxD.interspace         control .under 
+                0.5932                 0.5701                 0.5666                 0.5761                 0.5238 
+     disturbance.under          drought.under              DxD.under 
+                0.4304                 0.5075                 0.5088 
+
+Eigenvalues for PCoA axes:
+(Showing 8 of 71 eigenvalues)
+ PCoA1  PCoA2  PCoA3  PCoA4  PCoA5  PCoA6  PCoA7  PCoA8 
+3.8987 2.6710 2.1104 1.6014 1.4040 1.0915 1.0492 0.9252 
+
+
+
+beta <- betadisper(vegdist(ASV_PERMANOVA), interaction(ENV.MATRIX$treatment,ENV.MATRIX$location))
+anova(beta)
+
+
+Analysis of Variance Table
+
+Response: Distances
+          Df  Sum Sq  Mean Sq F value Pr(>F)
+Groups     7 0.17839 0.025484  1.7467  0.114
+Residuals 64 0.93377 0.014590  
+
+
+beta_treatment <- betadisper(vegdist(ASV_PERMANOVA), ENV.MATRIX$treatment)
+anova(beta_treatment)
+
+
+Analysis of Variance Table
+
+Response: Distances
+          Df  Sum Sq   Mean Sq F value Pr(>F)
+Groups     3 0.02575 0.0085825  0.7341 0.5353
+Residuals 68 0.79498 0.0116909    
+
+
+beta_location <- betadisper(vegdist(ASV_PERMANOVA), ENV.MATRIX$location)
+anova(beta_location)
+
+Analysis of Variance Table
+
+Response: Distances
+          Df  Sum Sq  Mean Sq F value  Pr(>F)  
+Groups     1 0.06387 0.063869  6.9902 0.01011 *
+Residuals 70 0.63959 0.009137                  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
 #################### indicator species analysis ################################
 ##Use the rel_com matrix created above because it has relative abundance data
 
