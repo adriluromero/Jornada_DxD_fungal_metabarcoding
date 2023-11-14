@@ -1,0 +1,1795 @@
+##STATS Drought x Disturbance plots 
+
+#load packages
+require(ggplot2)
+require(vegan)
+require(dplyr)
+require(data.table)
+require(funrar) #for relative abundance
+require(ggsci)
+require(indicspecies)
+require(abdiv)
+require(tidyverse)
+require(stringr)
+require(forcats)
+require(ggpubr)
+require(lme4)
+require(lmerTest)
+require(psych)
+require(tidyr)
+require(usedist)
+require(emmeans)
+require(multcomp)
+
+#import the data tables to use
+otu.clean <- read.csv("otu.tables.clean.csv", row.names = 1)
+clean2 <- read.csv("otu.tables.clean2.csv")
+
+##################### NMDS ####################################################
+
+#Select the columns with the ASV data and make it a matrix.
+com <- otu.clean[,5:ncol(otu.clean)]
+m_com <- as.matrix(com)
+
+#Calculate relative abundances
+rel_com <- make_relative(m_com)
+
+#do the NMDS
+set.seed(100)
+nmds <- metaMDS(rel_com, distance = "bray", trymax = 2000, k=3, autotransform = F, noshare = TRUE)
+
+nmds
+
+-------------------------------NMDS RESULTS----------------------------------------------------
+
+Using step-across dissimilarities:
+Too long or NA distances: 154 out of 2556 (6.0%)
+Stepping across 2556 dissimilarities...
+Connectivity of distance matrix with threshold dissimilarity 1 
+Data are connected
+Run 0 stress 0.144943 
+Run 1 stress 0.1473727 
+Run 2 stress 0.1485827 
+Run 3 stress 0.1454468 
+Run 4 stress 0.1497924 
+Run 5 stress 0.1490719 
+Run 6 stress 0.1466013 
+Run 7 stress 0.1455373 
+Run 8 stress 0.1466875 
+Run 9 stress 0.1505497 
+Run 10 stress 0.1466393 
+Run 11 stress 0.1464465 
+Run 12 stress 0.1454362 
+... Procrustes: rmse 0.01433297  max resid 0.07399975 
+Run 13 stress 0.1481025 
+Run 14 stress 0.1455237 
+Run 15 stress 0.1466413 
+Run 16 stress 0.1487043 
+Run 17 stress 0.1453139 
+... Procrustes: rmse 0.04023475  max resid 0.3055095 
+Run 18 stress 0.1470477 
+Run 19 stress 0.1478335 
+Run 20 stress 0.1465541 
+Run 21 stress 0.1486157 
+Run 22 stress 0.148731 
+Run 23 stress 0.1480818 
+Run 24 stress 0.1472604 
+Run 25 stress 0.1449886 
+... Procrustes: rmse 0.01751311  max resid 0.08344848 
+Run 26 stress 0.1454383 
+... Procrustes: rmse 0.04957064  max resid 0.3004779 
+Run 27 stress 0.1472634 
+Run 28 stress 0.1495096 
+Run 29 stress 0.1449432 
+... Procrustes: rmse 0.0008370408  max resid 0.005329126 
+... Similar to previous best
+*** Solution reached
+> nmds
+
+Call:
+metaMDS(comm = rel_com, distance = "bray", k = 3, trymax = 2000,      autotransform = F, noshare = TRUE) 
+
+global Multidimensional Scaling using monoMDS
+
+Data:     rel_com 
+Distance: bray shortest 
+
+Dimensions: 3 
+Stress:     0.144943 
+Stress type 1, weak ties
+Two convergent solutions found after 29 tries
+Scaling: centring, PC rotation, halfchange scaling 
+Species: expanded scores based on ‘rel_com’ 
+
+plot(nmds)
+
+#extract NMDS scores (x and y coordinates)
+data.scores = as.data.frame(scores(nmds))
+
+#add columns to data frame 
+data.scores$Treatment = otu.clean$treatment
+data.scores$Location = otu.clean$location
+
+head(data.scores)
+
+                             NMDS1       NMDS2       NMDS3 Treatment   Location
+X26_S26_108_L001_R1_001 -0.6771124  0.02893052 -0.32753116  control  interspace
+X27_S27_109_L001_R1_001 -1.0546702  0.45110387  0.13788037  control  interspace
+X29_S29_111_L001_R1_001 -0.4175128  0.50745483 -0.02437308  control  interspace
+X32_S32_48_L001_R1_001  -0.4904524  0.19055910  0.14836017  control  interspace
+X33_S33_49_L001_R1_001  -0.9534644 -0.17196662  0.36549916  control  interspace
+X37_S37_51_L001_R1_001  -0.2072679  0.45269307 -0.13344900  control  interspace
+
+xx <- ggplot(data.scores, aes(x = NMDS1, y = NMDS2)) + 
+  geom_point(size = 4, aes( shape = Location, colour = Treatment))+ 
+  theme(axis.text.y = element_text(colour = "black", size = 12, face = "bold"), 
+        axis.text.x = element_text(colour = "black", face = "bold", size = 12), 
+        legend.text = element_text(size = 12, face ="bold", colour ="black"), 
+        legend.position = "right", axis.title.y = element_text(face = "bold", size = 14), 
+        axis.title.x = element_text(face = "bold", size = 14, colour = "black"), 
+        legend.title = element_text(size = 14, colour = "black", face = "bold"), 
+        panel.background = element_blank(), panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+        legend.key=element_blank()) + 
+  labs(x = "MDS1", colour = "Treatment", y = "MDS2", shape = "Location")  + 
+  scale_colour_manual(values=c("#FFC300","#CD7F32","#9E0142", "#F46D43")) 
+
+xx
+
+jpeg("xx.jpeg",
+     height = 6, width = 10, units = 'in', res = 600)
+plot(xx)
+dev.off()
+
+#################### Two-way PERMANOVA #########################################
+
+###two eay PERMANOVA 
+ASV_PERMANOVA <- read.csv("rel_abundance_ASV_PERMANOVA.csv")
+View(ASV_PERMANOVA)
+
+ENV.MATRIX <- read.csv("rel_abundance_env_matriz_PERMANOVA.csv")
+View(ENV.MATRIX)
+
+adonis2(vegdist(ASV_PERMANOVA) ~ treatment*location, data = ENV.MATRIX) 
+
+Permutation test for adonis under reduced model
+Terms added sequentially (first to last)
+Permutation: free
+Number of permutations: 999
+
+adonis2(formula = vegdist(ASV_PERMANOVA) ~ treatment * location, data = ENV.MATRIX)
+                   Df SumOfSqs      R2      F Pr(>F)    
+treatment           3   1.6243 0.06242 1.6088  0.005 ** 
+location            1   1.7323 0.06657 5.1472  0.001 ***
+treatment:location  3   1.1269 0.04330 1.1161  0.208    
+Residual           64  21.5388 0.82771                  
+Total              71  26.0222 1.00000                  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+##Treatment explains 6% and is significant
+##Location explains 6% and is significant 
+##Treatment:location explains 4% and is not significant 
+##Unexplained variance 82%
+
+
+#################### indicator species analysis ################################
+##Use the rel_com matrix created above because it has relative abundance data
+
+head(rel_com)
+treatment <- otu.clean$treatment
+location <- otu.clean$location
+
+#by treatment
+inv <- multipatt(rel_com, treatment, func = "r.g", control = how(nperm = 9999))
+summary(inv)
+
+#by location
+inv2 <- multipatt(rel_com, location, func = "r.g", control = how(nperm = 9999))
+summary(inv2)
+-----------------------------------INDICATOR SPECIES RESULTS-------------------------------
+
+Multilevel pattern analysis BY TREATMENT
+ ---------------------------
+
+ Association function: r.g
+ Significance level (alpha): 0.05
+
+ Total number of species: 705
+ Selected number of species: 3 
+ Number of species associated to 1 group: 3 
+ Number of species associated to 2 groups: 0 
+ Number of species associated to 3 groups: 0 
+
+ List of species associated to each combination: 
+
+ Group control   #sps.  1 
+       stat p.value   
+ASV33 0.363  0.0054 **
+
+ Group DxD  #sps.  2 
+       stat p.value    
+ASV39 0.373  0.0007 ***
+ASV24 0.332  0.0207 *  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1 
+
+Multilevel pattern analysis BY LOCATION 
+ ---------------------------
+
+ Association function: r.g
+ Significance level (alpha): 0.05
+
+ Total number of species: 705
+ Selected number of species: 14 
+ Number of species associated to 1 group: 14 
+
+ List of species associated to each combination: 
+
+ Group interspace  #sps.  9 
+        stat p.value    
+ASV6   0.360  0.0003 ***
+ASV28  0.315  0.0002 ***
+ASV24  0.278  0.0031 ** 
+ASV4   0.274  0.0072 ** 
+ASV38  0.257  0.0124 *  
+ASV110 0.241  0.0261 *  
+ASV21  0.229  0.0177 *  
+ASV51  0.218  0.0118 *  
+ASV36  0.203  0.0327 *  
+
+ Group under  #sps.  5 
+       stat p.value    
+ASV1  0.590  0.0001 ***
+ASV5  0.461  0.0001 ***
+ASV15 0.280  0.0005 ***
+ASV52 0.184  0.0052 ** 
+ASV57 0.148  0.0261 *  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1 
+
+
+Multilevel pattern analysis BY TREATMENT AND LOCATION 
+ ---------------------------
+
+ Association function: r.g
+ Significance level (alpha): 0.05
+
+ Total number of species: 705
+ Selected number of species: 13 
+ Number of species associated to 1 group: 8 
+ Number of species associated to 2 groups: 3 
+ Number of species associated to 3 groups: 1 
+ Number of species associated to 4 groups: 1 
+ Number of species associated to 5 groups: 0 
+ Number of species associated to 6 groups: 0 
+ Number of species associated to 7 groups: 0 
+
+ List of species associated to each combination: 
+
+ Group control_interspace  #sps.  1 
+       stat p.value  
+ASV29 0.441  0.0109 *
+
+ Group control_under  #sps.  1 
+       stat p.value  
+ASV61 0.504   0.012 *
+
+ Group disturbance_interspace  #sps.  1 
+        stat p.value  
+ASV248 0.538  0.0119 *
+
+ Group DxD_interspace  #sps.  3 
+        stat p.value   
+ASV24  0.526  0.0029 **
+ASV21  0.468  0.0112 * 
+ASV158 0.358  0.0110 * 
+
+ Group frought_under  #sps.  2 
+       stat p.value   
+ASV37 0.530  0.0085 **
+ASV34 0.368  0.0085 **
+
+ Group control_interspace+disturbance_interspace  #sps.  1 
+      stat p.value  
+ASV4 0.411   0.016 *
+
+ Group control_interspace+DxD_interspace  #sps.  1 
+        stat p.value  
+ASV110 0.417  0.0364 *
+
+ Group control_under+DxD_under  #sps.  1 
+       stat p.value  
+ASV15 0.423  0.0231 *
+
+ Group disturbance_under+DxD_under+frought_under  #sps.  1 
+      stat p.value   
+ASV5 0.489  0.0017 **
+
+ Group control_under+disturbance_under+DxD_under+frought_under  #sps.  1 
+     stat p.value    
+ASV1 0.59   1e-04 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1 
+
+#################### % relative abundance graphs ############################
+
+#Reshape the data frame so that the ASV counts are in one column
+
+#begin with the 'otu.tables.clean.csv' file
+
+#make rownames (sample ID) to a column using dplyr
+otu.clean <- rownames_to_column(otu.clean, "Sample")
+
+#Use pivot longer to reshape the data frame
+
+pv <- otu.clean %>%
+  pivot_longer(
+    cols = starts_with("ASV"),
+    names_to = "OTU",
+    values_to = "Counts")
+
+#Use the data frame 'Clean2' (functional and taxonomic data)
+
+
+#Only keep the columns with taxonomy and functional data
+clean2 <- subset(clean2, select = - c(2:73))
+
+#rename column names
+colnames(clean2)<-clean2[3,]
+
+#get rid of the empty rows
+clean2 <- clean2[c(-1, -2, -3),]
+
+colnames(clean2)[1]<- "OTU"
+
+#now merge the pivoted data with taxonomy & functional data by ASV
+rel_abundance <- left_join(pv, clean2, by = "OTU")
+
+View(rel_abundance)
+
+#Calculate the relative abundance by location and treatment
+
+mydf <- rel_abundance %>% 
+  group_by(location, treatment) %>%
+  summarise(total= sum (Counts))
+
+new_rel_a <- merge(rel_abundance, mydf, by= c("location", "treatment"))
+new_rel_a$Relative_abundance <- (new_rel_a$Counts/new_rel_a$total)*100
+
+#Modify taxonomy names
+new_rel_a <- new_rel_a %>%
+  mutate_at("Kingdom", str_replace, "k__", "") %>%
+  mutate_at("Phylum", str_replace, "p__", "") %>%
+  mutate_at("Class", str_replace, "c__", "") %>%
+  mutate_at("Order", str_replace, "o__", "") %>%
+  mutate_at("Family", str_replace, "f__", "") %>%
+  mutate_at("Genus", str_replace, "g__", "") %>%
+  mutate_at("Species", str_replace, "s__", "")
+
+write.csv(new_rel_a, "new_rel_abundance.csv")
+
+#import spreadsheet modified by Adriana to use for the rest
+manual_edits <- read.csv("edits_manual.csv")
+
+View(manual_edits)
+
+#make a % plot for phylum
+
+StackedBarPlot_phylum <- manual_edits %>% 
+  ggplot(aes(x =treatment, y = Relative_abundance, fill = Phylum)) +
+  geom_bar(stat = "identity") + 
+  labs(x = "",
+       y = "Relative Abundance (%)",
+       title = "Phylum ") +
+  facet_grid(~ location, scales = "free")+
+  scale_fill_manual(values = c("#9E0142", "#D53E4F", "#F46D43",  "#FDAE61",
+                    "#E6F598", "#ABDDA4", "#66C2A5", "#3288BD", "#5D3FD3","#5E4FA2"), name = "Phylum", labels = c("Ascomycota", "Basidiomycota", 
+                                                  "Calcarisporiellomycota", "Chytridiomycota",
+                                                  "Glomeromycota", "Mortierellomycota", "Mucoromycota",
+                                                  "Olpidiomycota", "Unknown"))+
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+StackedBarPlot_phylum
+
+jpeg("Phylum.jpeg",
+     height = 6, width = 6, units = 'in', res = 600)
+plot(StackedBarPlot_phylum)
+dev.off()
+
+#Since the rest of the ranks have more than 10 categories, only plot
+#the top 10 categories 
+
+#I followed this tutorial https://cran.r-project.org/web/packages/forcats/vignettes/forcats.html
+
+#Barplot for Class
+
+Class_lump<- 
+  manual_edits %>% 
+  mutate(Class = fct_lump_n(Class, n= 10, w=Relative_abundance)) 
+
+StackedBarPlot_class <- Class_lump %>% 
+  ggplot(aes(x =treatment, y = Relative_abundance, fill = Class)) +
+  geom_bar(stat = "identity") + 
+  labs(x = "",
+       y = "Relative Abundance (%)",
+       title = "Class ") +
+  facet_grid(~ location, scales = "free")+
+ scale_fill_manual(values = c("#9E0142", "#D53E4F", "#F46D43",  "#FDAE61","#E49B0F",
+                              "#E6F598", "#ABDDA4", "#66C2A5", "#3288BD","#8f87de", "#5D3FD3","#5E4FA2"), name = "Class", labels = c("Agaricomycetes",
+                                              "Dothideomycetes", "Eurotiomycetes",
+"Microbotryomycetes", "Mortierellomycetes", "Pezizomycetes", "Rhizophlyctidomycetes",
+ "Spizellomycetes", "Tremellomycetes", "Wallemiomycetes", "Other", "Unknown"))+
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+StackedBarPlot_class
+
+jpeg("Class.jpeg",
+     height = 6, width = 6, units = 'in', res = 600)
+plot(StackedBarPlot_class)
+dev.off()
+
+#make a plot for Order
+
+Order_lump<- 
+  manual_edits %>% 
+  mutate(Order = fct_lump_n(Order, n= 10, w=Relative_abundance)) 
+
+StackedBarPlot_order <- Order_lump %>% 
+  ggplot(aes(x =treatment, y = Relative_abundance, fill = Order)) +
+  geom_bar(stat = "identity") + 
+  labs(x = "",
+       y = "Relative Abundance (%)",
+       title = "Order") +
+  facet_grid(~ location, scales = "free")+
+  scale_fill_manual(values = c("#9E0142", "#D53E4F", "#F46D43",  "#FDAE61","#E49B0F",
+  "#E6F598", "#ABDDA4", "#66C2A5", "#3288BD","#8f87de", "#5D3FD3","#5E4FA2"), name = "Order", labels = c("Agaricales", "Cantharellales", 
+                                                "Chaetothyriales",
+                                                 "Filobasidiales", "Geastrales", "Pleosporales",
+                                                 "Rhizophlyctidales", "Spizellomycetales", "Sporidiobolales","Wallemiales",
+                                                 "Other", "Unknown"))+
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+StackedBarPlot_order
+
+jpeg("Order.jpeg",
+     height = 6, width = 6, units = 'in', res = 600)
+plot(StackedBarPlot_order)
+dev.off()
+
+
+#make a plot for Family
+
+family_lump<- 
+  manual_edits %>% 
+  mutate(Family = fct_lump_n(Family, n= 10, w=Relative_abundance)) 
+
+StackedBarPlot_family <- family_lump %>% 
+  ggplot(aes(x =treatment, y = Relative_abundance, fill = Family)) +
+  geom_bar(stat = "identity") + 
+  labs(x = "",
+       y = "Relative Abundance (%)",
+       title = "Family") +
+  facet_grid(~ location, scales = "free")+
+  scale_fill_manual(values = c("#9E0142", "#D53E4F", "#F46D43",  "#FDAE61","#E49B0F",
+                              "#E6F598", "#ABDDA4", "#66C2A5", "#3288BD","#8f87de", "#5D3FD3","#5E4FA2"), 
+                  name = "Family", labels = c("Agaricaceae", "Ceratobasidiaceae", 
+                                                "Chaetothyriales_fam_Incertae_sedis", "Didymellaceae", "Filobasidiaceae",
+                                                 "Geastraceae", "Marasmiaceae", "Rhizophlyctidaceae",
+                                                "Spizellomycetaceae", "Sporidiobolaceae",
+                                                  "Other", "Unknown"))+
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+StackedBarPlot_family
+
+jpeg("family.jpeg",
+     height = 6, width = 7, units = 'in', res = 600)
+plot(StackedBarPlot_family)
+dev.off()
+
+
+##Genus
+
+Genus_lump<- 
+  manual_edits %>% 
+  mutate(Genus = fct_lump_n(Genus, n= 10, w=Relative_abundance)) 
+  
+#Make a plot
+StackedBarPlot_genus <- Genus_lump %>% 
+  ggplot(aes(x =treatment, y = Relative_abundance, fill = Genus)) +
+  geom_bar(stat = "identity") + 
+  labs(x = "",
+       y = "Relative Abundance (%)",
+       title = "Genus") +
+  facet_grid(~ location, scales = "free")+
+    scale_fill_manual(values = c("#9E0142", "#D53E4F", "#F46D43",  "#FDAE61","#E49B0F",
+                                 "#E6F598", "#ABDDA4", "#66C2A5", "#3288BD","#8f87de", "#5D3FD3","#5E4FA2"), name = "Genus", labels = c("Ceratobasidium", "Coprinus", 
+                                                  "Filobasidium", "Geastrum",
+                                                  "Moniliophthora", "Naganishia", "Rhizophlyctis",
+                                                 "Rhodosporidiobolus", "Thanatephorus", "Tulostoma", "Other",
+                                                  "Unknown"))+
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+StackedBarPlot_genus
+
+jpeg("genus.jpeg",
+     height = 6, width = 6, units = 'in', res = 600)
+plot(StackedBarPlot_genus)
+dev.off()
+
+#Merge plots into one figure
+Ranks<-
+  ggarrange(StackedBarPlot_phylum, StackedBarPlot_class, StackedBarPlot_order, StackedBarPlot_family, StackedBarPlot_genus,
+          labels = c("A", "B", "C", "D", "E"),
+          ncol = 3, nrow = 2)
+Ranks
+
+jpeg("All.jpeg",
+     height = 6, width = 15, units = 'in', res = 600)
+plot(Ranks)
+dev.off()
+
+#####################Alpha Diversity#####################################
+
+#Modify the 'new_rel_a' data frame to only include the columns
+#we need for calculating alpha diversity. We will use count data for this step.
+#Use the packages 'vegan' and 'abdiv'
+
+Alpha <- manual_edits %>%
+  dplyr::select(location, treatment, Sample, OTU, Relative_abundance)
+Alpha
+
+#Calculate richness and evenness 
+
+a_div<- Alpha %>%
+  group_by(location, treatment, Sample) %>%
+  summarise_at(vars(Relative_abundance), c("richness","pielou_e"))
+a_div
+
+write.csv(a_div, "alpha_diversity.csv" )
+
+#The Shannon Index given by 'abdiv' package seems too low. 
+#When I redo the calculation manually and with vegan I get
+#something else. I will calculate Shannon's H index using 'vegan' diversity function.
+#I followed this tutorial 
+#https://rpubs.com/mbh038/719881
+
+Shan_div<-Alpha %>%
+  group_by(location, treatment, Sample) %>%
+  summarise(N=sum(Relative_abundance),
+            shannon.di=diversity(Relative_abundance, index = "shannon", MARGIN = 2)) %>%
+  arrange(-shannon.di)
+Shan_div
+
+write.csv(Shan_div, "Shannon_index.csv" )
+
+#Now plot the measures of diversity by treatment and location
+
+plot.shan <- ggplot(Shan_div, aes(x= treatment, y = shannon.di, fill=treatment))+
+  geom_boxplot() +
+  geom_jitter(shape=16, position=position_jitterdodge(jitter.width = 0.01))+
+  scale_fill_manual(values=c("#FFC300","#CD7F32","#9E0142", "#F46D43"), name = "Treatment")+
+  ylab("Shannon's H'")+
+  xlab("")+
+  facet_grid(~ location, scales = "free")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.4),
+        text = element_text(size=20),
+        legend.position = "none")
+plot.shan
+
+jpeg("Shannon_3.jpeg",
+     height = 6, width = 6, units = 'in', res = 600)
+plot(plot.shan)
+dev.off()
+
+plot.rich <- ggplot(a_div, aes(x= treatment, y = richness, fill=treatment))+
+  geom_boxplot() +
+  geom_jitter(shape=16, position=position_jitterdodge(jitter.width = 0.01))+
+  scale_fill_manual(values=c("#FFC300","#CD7F32","#9E0142", "#F46D43"), name = "Treatment")+
+  ylab("Species Richness")+
+  xlab("")+
+  facet_grid(~ location, scales = "free")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.4),
+        text = element_text(size=20),
+        legend.position = "none")
+plot.rich
+
+jpeg("richness_2.jpeg",
+     height = 6, width = 6, units = 'in', res = 600)
+plot(plot.rich)
+dev.off()
+
+plot.even <- ggplot(a_div, aes(x= treatment, y = pielou_e, fill=treatment))+
+  geom_boxplot() +
+  geom_jitter(shape=16, position=position_jitterdodge(jitter.width = 0.01))+
+  scale_fill_manual(values=c("#FFC300","#CD7F32","#9E0142", "#F46D43"), name = "Treatment")+
+  ylab("Pielou's Evenness")+
+  xlab("")+
+  facet_grid(~ location, scales = "free")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.4),
+        text = element_text(size=20),
+        legend.position = "none")
+plot.even
+
+jpeg("evenness_2.jpeg",
+     height = 6, width = 6, units = 'in', res = 600)
+plot(plot.even)
+dev.off()
+
+
+#Combine plots
+
+ggarrange(plot.shan, plot.rich, plot.even,
+          labels = c("A", "B", "C"),
+          ncol = 3, nrow = 1)
+		  
+#########ANOVA for diversity indices
+
+alpha.diversity.under <- read.csv("alpha_diversity_under.csv", row.names = 1)
+
+treatment <-as.factor(alpha.diversity.under$treatment)
+ANOVA1 <-aov(alpha.diversity.under$richness~treatment)
+summary(ANOVA1)
+
+posthoc <- TukeyHSD(ANOVA1)
+posthoc		  
+		  
+            Df Sum Sq Mean Sq F value Pr(>F)  
+treatment    3    494  164.67   3.373 0.0303 *
+Residuals   32   1562   48.81                 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+		  
+  Tukey multiple comparisons of means
+    95% family-wise confidence level
+
+Fit: aov(formula = alpha.diversity.under$richness ~ treatment)
+
+$treatment
+                           diff        lwr       upr     p adj
+disturbance-control  -10.333333 -19.256649 -1.410018 0.0181743
+drought-control       -3.666667 -12.589982  5.256649 0.6841149
+DxD-control           -4.666667 -13.589982  4.256649 0.4983600
+drought-disturbance    6.666667  -2.256649 15.589982 0.2004553
+DxD-disturbance        5.666667  -3.256649 14.589982 0.3300282
+DxD-drought           -1.000000  -9.923316  7.923316 0.9900925		  
+		  
+
+ANOVA1 <-aov(alpha.diversity.under$pielou_e~treatment)
+summary(ANOVA1)
+
+posthoc <- TukeyHSD(ANOVA1)
+posthoc
+
+            Df Sum Sq Mean Sq F value Pr(>F)
+treatment    3 0.1129 0.03763   1.931  0.144
+Residuals   32 0.6237 0.01949  
+
+  Tukey multiple comparisons of means
+    95% family-wise confidence level
+
+Fit: aov(formula = alpha.diversity.under$pielou_e ~ treatment)
+
+$treatment
+                            diff         lwr        upr     p adj
+disturbance-control   0.08133522 -0.09697601 0.25964645 0.6092195
+drought-control      -0.03390562 -0.21221685 0.14440561 0.9548557
+DxD-control          -0.07004860 -0.24835983 0.10826263 0.7132572
+drought-disturbance  -0.11524084 -0.29355207 0.06307039 0.3150919
+DxD-disturbance      -0.15138382 -0.32969505 0.02692741 0.1192245
+DxD-drought          -0.03614298 -0.21445421 0.14216825 0.9460956
+
+
+alpha.diversity.inter <- read.csv("alpha_diversity_inter.csv", row.names = 1)
+
+treatment <-as.factor(alpha.diversity.inter$treatment)
+ANOVA1 <-aov(alpha.diversity.inter$richness~treatment)
+summary(ANOVA1)
+
+            Df Sum Sq Mean Sq F value Pr(>F)
+treatment    3    346   115.3   0.653  0.587
+Residuals   32   5654   176.7 
+
+posthoc <- TukeyHSD(ANOVA1)
+posthoc
+
+  Tukey multiple comparisons of means
+    95% family-wise confidence level
+
+Fit: aov(formula = alpha.diversity.inter$richness ~ treatment)
+
+$treatment
+                           diff        lwr      upr     p adj
+disturbance-control  -7.5555556 -24.532661  9.42155 0.6277479
+drought-control      -1.4444444 -18.421550 15.53266 0.9955949
+DxD-control          -0.1111111 -17.088216 16.86599 0.9999980
+drought-disturbance   6.1111111 -10.865994 23.08822 0.7643483
+DxD-disturbance       7.4444444  -9.532661 24.42155 0.6386441
+DxD-drought           1.3333333 -15.643772 18.31044 0.9965242
+
+
+ANOVA1 <-aov(alpha.diversity.inter$pielou_e~treatment)
+summary(ANOVA1)
+
+            Df Sum Sq  Mean Sq F value Pr(>F)
+treatment    3 0.0239 0.007955   0.548  0.653
+Residuals   31 0.4499 0.014512               
+1 observation deleted due to missingness
+
+posthoc <- TukeyHSD(ANOVA1)
+posthoc
+
+  Tukey multiple comparisons of means
+    95% family-wise confidence level
+
+Fit: aov(formula = alpha.diversity.inter$pielou_e ~ treatment)
+
+$treatment
+                            diff        lwr        upr     p adj
+disturbance-control  -0.07183551 -0.2307085 0.08703748 0.6147241
+drought-control      -0.01808419 -0.1722136 0.13604525 0.9886056
+DxD-control          -0.03748645 -0.1916159 0.11664299 0.9111715
+drought-disturbance   0.05375132 -0.1051217 0.21262431 0.7953136
+DxD-disturbance       0.03434906 -0.1245239 0.19322205 0.9353192
+DxD-drought          -0.01940226 -0.1735317 0.13472718 0.9860154
+
+Shannon.index.under <- read.csv("Shannon_index_under.csv", row.names = 1)
+
+treatment <-as.factor(Shannon.index.under$treatment)
+ANOVA1 <-aov(Shannon.index.under$shannon.di~treatment)
+summary(ANOVA1)
+
+posthoc <- TukeyHSD(ANOVA1)
+posthoc
+
+            Df Sum Sq Mean Sq F value Pr(>F)
+treatment    3  0.761  0.2537    0.92  0.442
+Residuals   32  8.829  0.2759 
+
+
+  Tukey multiple comparisons of means
+    95% family-wise confidence level
+
+Fit: aov(formula = Shannon.index.under$shannon.di ~ treatment)
+
+$treatment
+                             diff        lwr       upr     p adj
+disturbance-control  -0.364460020 -1.0353524 0.3064323 0.4657295
+drought-control      -0.313411944 -0.9843043 0.3574804 0.5908002
+DxD-control          -0.320380482 -0.9912729 0.3505119 0.5734388
+drought-disturbance   0.051048076 -0.6198443 0.7219404 0.9968355
+DxD-disturbance       0.044079538 -0.6268128 0.7149719 0.9979536
+DxD-drought          -0.006968538 -0.6778609 0.6639238 0.9999918
+
+
+Shannon.index.inter <- read.csv("Shannon_index_inter.csv", row.names = 1)
+
+treatment <-as.factor(Shannon.index.inter$treatment)
+ANOVA1 <-aov(Shannon.index.inter$shannon.di~treatment)
+summary(ANOVA1)
+
+posthoc <- TukeyHSD(ANOVA1)
+posthoc
+
+
+            Df Sum Sq Mean Sq F value Pr(>F)
+treatment    3  2.255  0.7516    2.01  0.132
+Residuals   32 11.964  0.3739 
+
+
+  Tukey multiple comparisons of means
+    95% family-wise confidence level
+
+Fit: aov(formula = Shannon.index.inter$shannon.di ~ treatment)
+
+$treatment
+                             diff        lwr       upr     p adj
+disturbance-control  -0.591785789 -1.3727378 0.1891662 0.1903746
+drought-control      -0.039693598 -0.8206456 0.7412584 0.9990477
+DxD-control          -0.005020919 -0.7859730 0.7759311 0.9999981
+drought-disturbance   0.552092191 -0.2288598 1.3330442 0.2419086
+DxD-disturbance       0.586764871 -0.1941872 1.3677169 0.1964034
+DxD-drought           0.034672680 -0.7462794 0.8156247 0.9993641
+	  
+		  
+#############Check the distribution of relative abundance#################
+
+hist(manual_edits$Relative_abundance, main = "Histogram", xlab = "Relative Abundance")
+ggqqplot(manual_edits$Relative_abundance) #not normally distributed
+
+#Try with a log transformation
+
+ggqqplot(log(manual_edits$Relative_abundance)) #this helped with normality of the data
+hist(log(manual_edits$Relative_abundance), main = "Histogram", xlab = "log(Relative Abundance)")
+
+#Rank the relative abundance data
+
+plot_ranks <-
+  manual_edits %>%
+  mutate(Rel_abundance_ranked = dense_rank(Relative_abundance)) %>%
+  arrange(Rel_abundance_ranked)
+
+
+write.csv(plot_ranks, "plot_ranks.csv")
+
+#now that the data is non-parametric, make your models.
+
+#####################linear mixed effects models################################
+
+#For the sake of analyzing posthoc comparisons, we will separate the dataset by location
+#and treat each location separately - also minimizes memory requirements
+##divide data in under and inter
+
+plot_ranks_under <- read.csv("plot_ranks_under.csv", header = T, sep = ",")
+plot_ranks_inter <- read.csv("plot_ranks_inter.csv", header = T, sep = ",")
+
+library(multcompView)
+library(lsmeans)
+library(emmeans)
+library(multcomp)
+
+--------------------------------PHYLUM UNDER--------------------------------------------
+
+##Model Phylum under
+
+model.Phylum <- lmer(rank ~ Phylum*treatment + (1|plot),
+                     data= plot_ranks_under)
+anova(model.Phylum)
+
+rand(model.Phylum)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                 Sum Sq Mean Sq NumDF   DenDF F value Pr(>F)    
+Phylum           991511  165252     6 16644.0 48.8438 <2e-16 ***
+treatment           169      56     3  5636.9  0.0167 0.9971    
+Phylum:treatment  51020    2834    18 16644.0  0.8378 0.6564    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Phylum + treatment + (1 | plot) + Phylum:treatment
+           npar logLik    AIC    LRT Df Pr(>Chisq)   
+<none>       30 -91497 183055                        
+(1 | plot)   29 -91502 183061 8.4861  1   0.003579 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+##Class under
+model.Class <- lmer(rank ~ Class*treatment + (1|plot),
+                    data= plot_ranks_under, 
+                    REML = TRUE)
+					
+anova(model.Class)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                 Sum Sq Mean Sq NumDF   DenDF F value Pr(>F)    
+Class           3540422  186338    19 16160.0 56.7319 <2e-16 ***
+treatment          1580     527     3   973.1  0.1604 0.9230    
+Class:treatment  165109    2897    57 16160.0  0.8819 0.7235    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+summary(model.Class)
+
+rand(model.Class)
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Class + treatment + (1 | plot) + Class:treatment
+           npar logLik    AIC    LRT Df Pr(>Chisq)   
+<none>       82 -88700 177564                        
+(1 | plot)   81 -88705 177572 10.138  1   0.001453 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+
+--------------------------------PHYLUM ALL--------------------------------------------
+
+plot_ranks <- read.csv("plot_ranks.csv", header = T, sep = ",")
+
+model.Phylum <- lmer(Rel_abundance_ranked ~ Phylum*treatment/location + (1|plot),
+                     data= plot_ranks)
+anova(model.Phylum)
+
+rand(model.Phylum)
+
+emm <- emmeans(model.Phylum, ~ Phylum:treatment/location) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 1000000)        # Change global options
+
+write.table(pairs_emm, file="phylum_comparison_all.csv", row.names=F, sep=",")
+
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                          Sum Sq Mean Sq NumDF DenDF F value    Pr(>F)    
+Phylum                    649961  108327     6 33309 33.4715 < 2.2e-16 ***
+treatment                   3448    1149     3  3308  0.3552    0.7854    
+Phylum:treatment           45856    2548    18 33309  0.7872    0.7180    
+Phylum:treatment:location 216336    7726    28 30753  2.3873 5.145e-05 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+ANOVA-like table for random-effects: Single term deletions
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+Rel_abundance_ranked ~ Phylum + treatment + (1 | plot) + Phylum:treatment + Phylum:treatment:location
+           npar  logLik    AIC    LRT Df Pr(>Chisq)    
+<none>       58 -182265 364646                         
+(1 | plot)   57 -182310 364735 90.742  1  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+
+--------------------------------ORDER UNDER--------------------------------------------
+model.Order <- lmer(rank ~ Order*treatment + (1|plot),
+                    data= plot_ranks_under, 
+                    REML = TRUE)
+
+anova(model.Order)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                 Sum Sq Mean Sq NumDF   DenDF F value Pr(>F)    
+Order           5176876  172563    30 15684.0 52.7471 <2e-16 ***
+treatment          1654     551     3   355.6  0.1686 0.9176    
+Order:treatment  241985    2689    90 15684.0  0.8219 0.8890    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+rand(model.Order)
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Order + treatment + (1 | plot) + Order:treatment
+           npar logLik    AIC   LRT Df Pr(>Chisq)   
+<none>      126 -86144 172541                       
+(1 | plot)  125 -86150 172549 10.78  1   0.001026 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+#post-hoc
+emm <- emmeans(model.Order, ~ Order:treatment) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 100000)        # Change global options
+
+
+write.table(pairs_emm, file="Order_comparison_under.csv", row.names=F, sep=",")
+
+
+
+
+--------------------------------FAMILY UNDER--------------------------------------------
+model.Family <- lmer(rank ~ Family*treatment + (1|plot),
+                     data= plot_ranks_under, 
+                     REML = TRUE)
+
+anova(model.Family)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                  Sum Sq Mean Sq NumDF   DenDF F value Pr(>F)    
+Family           5230816   80474    65 14824.0 23.4941 <2e-16 ***
+treatment           1080     360     3   160.9  0.1051  0.957    
+Family:treatment  356823    1830   195 14824.0  0.5342  1.000    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+rand(model.Family)
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Family + treatment + (1 | plot) + Family:treatment
+           npar logLik    AIC   LRT Df Pr(>Chisq)   
+<none>      266 -81980 164493                       
+(1 | plot)  265 -81985 164501 9.802  1   0.001743 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#post-hoc analysis
+emm <- emmeans(model.Family, ~ Family:treatment) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 100000)        # Change global options
+
+
+write.table(pairs_emm, file="Family_comparison_under.csv", row.names=F, sep=",")
+
+--------------------------------GENUS UNDER--------------------------------------------
+model.Genus <- lmer(rank ~ Genus*treatment + (1|plot),
+                    data= plot_ranks_under, 
+                    REML = TRUE)
+
+anova(model.Genus)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                 Sum Sq Mean Sq NumDF DenDF F value Pr(>F)    
+Genus           5260916   57812    91 12488 16.2962 <2e-16 ***
+treatment          1260     420     3    97  0.1184 0.9491    
+Genus:treatment  374674    1372   273 12488  0.3869 1.0000    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+rand(model.Genus)
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Genus + treatment + (1 | plot) + Genus:treatment
+           npar logLik    AIC    LRT Df Pr(>Chisq)   
+<none>      370 -69492 139723                        
+(1 | plot)  369 -69496 139731 9.1758  1   0.002452 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+--------------------------------PHYLUM INTER--------------------------------------------
+
+model.Phylum <- lmer(rank ~ Phylum*treatment + (1|plot),
+                     data= plot_ranks_inter)
+anova(model.Phylum)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                 Sum Sq Mean Sq NumDF DenDF F value Pr(>F)    
+Phylum           649961  108327     6 16647 35.3143 <2e-16 ***
+treatment          2049     683     3   412  0.2226 0.8807    
+Phylum:treatment  45856    2548    18 16647  0.8305 0.6654    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+rand(model.Phylum)
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Phylum + treatment + (1 | plot) + Phylum:treatment
+           npar logLik    AIC    LRT Df Pr(>Chisq)    
+<none>       30 -90703 181466                         
+(1 | plot)   29 -90794 181646 181.95  1  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#posthoc analysis 
+
+emm <- emmeans(model.Phylum, ~ Phylum:treatment) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 100000)        # Change global options
+
+write.table(pairs_emm, file="phylum_comparison_inter.csv", row.names=F, sep=",")
+
+--------------------------------CLASS INTER--------------------------------------------
+
+model.Class <- lmer(rank ~ Class*treatment + (1|plot),
+                    data= plot_ranks_inter, 
+                    REML = TRUE)
+
+anova(model.Class)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                 Sum Sq Mean Sq NumDF   DenDF F value Pr(>F)    
+Class           1848946   97313    19 16163.0 31.9676 <2e-16 ***
+treatment           911     304     3   108.3  0.0997 0.9600    
+Class:treatment   80102    1405    57 16163.0  0.4616 0.9998    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+rand(model.Class)
+
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Class + treatment + (1 | plot) + Class:treatment
+           npar logLik    AIC    LRT Df Pr(>Chisq)    
+<none>       82 -88106 176376                         
+(1 | plot)   81 -88196 176553 179.77  1  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#post-hoc analysis
+emm <- emmeans(model.Class, ~ Class:treatment) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 100000)        # Change global options
+
+
+write.table(pairs_emm, file="Class_comparison_inter.csv", row.names=F, sep=",")
+
+
+--------------------------------ORDER INTER--------------------------------------------
+
+##Order inter
+model.Order <- lmer(rank ~ Order*treatment + (1|plot),
+                    data= plot_ranks_inter, 
+                    REML = TRUE)
+
+anova(model.Order)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                 Sum Sq Mean Sq NumDF   DenDF F value Pr(>F)    
+Order           2643153   88105    30 15687.0 28.6475 <2e-16 ***
+treatment           615     205     3    63.3  0.0666 0.9774    
+Order:treatment  111412    1238    90 15687.0  0.4025 1.0000   
+
+rand(model.Order)
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Order + treatment + (1 | plot) + Order:treatment
+           npar logLik    AIC    LRT Df Pr(>Chisq)    
+<none>      126 -85680 171612                         
+(1 | plot)  125 -85772 171793 183.22  1  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#post-hoc
+emm <- emmeans(model.Order, ~ Order:treatment) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 100000)        # Change global options
+
+
+write.table(pairs_emm, file="Order_comparison_inter.csv", row.names=F, sep=",")
+
+
+--------------------------------FAMILY INTER--------------------------------------------
+
+model.Family <- lmer(rank ~ Family*treatment + (1|plot),
+                     data= plot_ranks_inter, 
+                     REML = TRUE)
+
+anova(model.Family)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                  Sum Sq Mean Sq NumDF   DenDF F value Pr(>F)    
+Family           2718881   41829    65 14827.0 13.1600 <2e-16 ***
+treatment            446     149     3    45.7  0.0468 0.9864    
+Family:treatment  197206    1011   195 14827.0  0.3182 1.0000    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+rand(model.Family)
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Family + treatment + (1 | plot) + Family:treatment
+           npar logLik    AIC    LRT Df Pr(>Chisq)    
+<none>      266 -81446 163424                         
+(1 | plot)  265 -81532 163595 172.75  1  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#post-hoc analysis
+emm <- emmeans(model.Family, ~ Family:treatment) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 100000)        # Change global options
+
+
+write.table(pairs_emm, file="Family_comparison_inter.csv", row.names=F, sep=",")
+
+
+--------------------------------GENUS INTER--------------------------------------------
+
+model.Genus <- lmer(rank ~ Genus*treatment + (1|plot),
+                    data= plot_ranks_inter, 
+                    REML = TRUE)
+
+anova(model.Genus)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                 Sum Sq Mean Sq NumDF   DenDF F value Pr(>F)    
+Genus           3207717   35250    91 12491.0 10.5876 <2e-16 ***
+treatment           169      56     3    39.3  0.0170 0.9969    
+Genus:treatment  317267    1162   273 12491.0  0.3491 1.0000    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+rand(model.Genus)
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Genus + treatment + (1 | plot) + Genus:treatment
+           npar logLik    AIC    LRT Df Pr(>Chisq)    
+<none>      370 -69114 138968                         
+(1 | plot)  369 -69189 139116 149.43  1  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#post-hoc 
+emm <- emmeans(model.Genus, ~ Genus:treatment) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 100000)        # Change global options
+
+write.table(pairs_emm, file="Genus_comparison_inter.csv", row.names=F, sep=",")
+
+####Functional data : Linear mixed effects model############
+#Rename the Trophic Mode and Growth Morphology columns.
+
+#plot_ranks_under <- rename(plot_ranks_under, Trophic.Mode = 'Trophic Mode')
+#plot_ranks <- rename(plot_ranks, Growth.Morphology = 'Growth Morphology')
+
+#subset the data frame by trophic mode, guild, growth morphology, and trait. 
+
+
+------------------------------------------ TROPHIC UNDER -----------------------------------
+  
+if(!require(psych)){install.packages("psych")}
+if(!require(lme4)){install.packages("lme4")}
+if(!require(lmerTest)){install.packages("lmerTest")}
+if(!require(multcompView)){install.packages("multcompView")}
+if(!require(lsmeans)){install.packages("lsmeans")}
+if(!require(nlme)){install.packages("nlme")}
+if(!require(car)){install.packages("car")}
+if(!require(rcompanion)){install.packages("rcompanion")}
+
+Data <- read.csv("new_rel_abundance_trophic-graph-UNDER.csv", header = T, sep = ",")
+View(Data)
+
+###  Otherwise, R will alphabetize them
+
+Data$treatment = factor(Data$treatment,
+                         levels=unique(Data$treatment))
+
+Data$plot       = factor(Data$plot,
+                         levels=unique(Data$plot))
+
+Data$Trophic_Mode_Final = factor(Data$Trophic_Mode_Final,
+                                 levels=unique(Data$Trophic_Mode_Final))
+  
+###  Check the data frame
+                         
+library(psych)
+headTail(Data)
+str(Data)
+summary(Data)   
+
+### Remove unnecessary objects
+
+library(lme4)
+library(lmerTest)
+
+model.trophic.under = lmer(rank ~ Trophic_Mode_Final*treatment + (1|plot),
+             data=Data,
+             REML=TRUE)
+
+
+anova(model.trophic.under)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                             Sum Sq Mean Sq NumDF DenDF F value Pr(>F)    
+Trophic_Mode_Final            90499 15083.2     6 18408 22.4612 <2e-16 ***
+treatment                       801   267.0     3    97  0.3977 0.7550    
+Trophic_Mode_Final:treatment   5373   298.5    18 18408  0.4445 0.9786    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+rand(model.trophic.under)
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Trophic_Mode_Final + treatment + (1 | plot) + Trophic_Mode_Final:treatment
+           npar logLik    AIC    LRT Df Pr(>Chisq)   
+<none>       30 -86280 172621                        
+(1 | plot)   29 -86285 172629 10.354  1   0.001292 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+> 
+
+#posthoc analysis 
+
+library(multcompView)
+library(lsmeans)
+
+emm <- emmeans(model.trophic.under, ~ Trophic_Mode_Final:treatment) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 100000)        # Change global options
+
+write.table(pairs_emm, file="Trophic_mode_under.csv", row.names=F, sep=",")
+
+###NO SIGNIFICANT DIFFERENCES WITHIN TREATMENTS ASSOCIATED TO TROPHIC MODE 
+
+
+------------------------------------------ MORPHOLOGY UNDER -----------------------------------
+
+
+Data <- read.csv("new_rel_abundance_trophic-graph-UNDER.csv", header = T, sep = ",")
+View(Data)
+
+###  Otherwise, R will alphabetize them
+
+Data$treatment = factor(Data$treatment,
+                        levels=unique(Data$treatment))
+
+Data$plot       = factor(Data$plot,
+                         levels=unique(Data$plot))
+
+Data$Growth_morphology = factor(Data$Growth_morphology,
+                                 levels=unique(Data$Growth_morphology))
+
+###  Check the data frame
+
+library(psych)
+headTail(Data)
+str(Data)
+summary(Data)   
+
+### Remove unnecessary objects
+
+library(lme4)
+library(lmerTest)
+
+Growth_morphology_UNDER = lmer(rank ~ Growth_morphology*treatment + (1|plot),
+                           data=Data,
+                           REML=TRUE)
+
+
+anova(Growth_morphology_UNDER)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                            Sum Sq Mean Sq NumDF   DenDF F value Pr(>F)    
+Growth_morphology           348151   58025     6 18408.0 88.2619 <2e-16 ***
+treatment                     1453     484     3  1221.4  0.7365 0.5303    
+Growth_morphology:treatment   7270     404    18 18408.0  0.6144 0.8918    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+rand(Growth_morphology_UNDER)
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Growth_morphology + treatment + (1 | plot) + Growth_morphology:treatment
+           npar logLik    AIC    LRT Df Pr(>Chisq)    
+<none>       30 -86078 172217                         
+(1 | plot)   29 -86084 172226 11.069  1  0.0008776 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#posthoc analysis 
+
+library(multcompView)
+library(lsmeans)
+
+emm <- emmeans(Growth_morphology_UNDER, ~ Growth_morphology:treatment) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 100000)        # Change global options
+
+write.table(pairs_emm, file="Growth_morphology_UNDER.csv", row.names=F, sep=",")
+
+###NO SIGNIFICANT DIFFERENCES WITHIN TREATMENTS ASSOCIATED TO TROPHIC MODE 
+
+#------------------------------------------ TROPHIC INTER -----------------------------------
+
+if(!require(psych)){install.packages("psych")}
+if(!require(lme4)){install.packages("lme4")}
+if(!require(lmerTest)){install.packages("lmerTest")}
+if(!require(multcompView)){install.packages("multcompView")}
+if(!require(lsmeans)){install.packages("lsmeans")}
+if(!require(nlme)){install.packages("nlme")}
+if(!require(car)){install.packages("car")}
+if(!require(rcompanion)){install.packages("rcompanion")}
+
+Data <- read.csv("new_rel_abundance_trophic-graph-INTER.csv", header = T, sep = ",")
+View(Data)
+
+###  Otherwise, R will alphabetize them
+
+Data$treatment = factor(Data$treatment,
+                        levels=unique(Data$treatment))
+
+Data$plot       = factor(Data$plot,
+                         levels=unique(Data$plot))
+
+Data$Trophic_Mode_Final = factor(Data$Trophic_Mode_Final,
+                                 levels=unique(Data$Trophic_Mode_Final))
+
+###  Check the data frame
+
+library(psych)
+headTail(Data)
+str(Data)
+summary(Data)   
+
+### Remove unnecessary objects
+
+library(lme4)
+library(lmerTest)
+
+model.trophic.INTER = lmer(rank ~ Trophic_Mode_Final*treatment + (1|plot),
+                           data=Data,
+                           REML=TRUE)
+
+
+anova(model.trophic.INTER)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                             Sum Sq Mean Sq NumDF   DenDF F value    Pr(>F)    
+Trophic_Mode_Final            44804  7467.3     6 18411.0  8.5853 2.411e-09 ***
+treatment                       219    73.1     3    36.9  0.0841    0.9683    
+Trophic_Mode_Final:treatment   7560   420.0    18 18411.0  0.4829    0.9664    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+rand(model.trophic.INTER)
+
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Trophic_Mode_Final + treatment + (1 | plot) + Trophic_Mode_Final:treatment
+           npar logLik    AIC    LRT Df Pr(>Chisq)    
+<none>       30 -88689 177437                         
+(1 | plot)   29 -88797 177651 216.11  1  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#posthoc analysis 
+
+library(multcompView)
+library(lsmeans)
+
+emm <- emmeans(model.trophic.INTER, ~ Trophic_Mode_Final:treatment) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 100000)        # Change global options
+
+write.table(pairs_emm, file="Trophic_mode_INTER.csv", row.names=F, sep=",")
+
+###NO SIGNIFICANT DIFFERENCES WITHIN TREATMENTS ASSOCIATED TO TROPHIC MODE 
+
+
+------------------------------------------ MORPHOLOGY INTER -----------------------------------
+
+
+Data <- read.csv("new_rel_abundance_trophic-graph-INTER.csv", header = T, sep = ",")
+View(Data)
+
+###  Otherwise, R will alphabetize them
+
+Data$treatment = factor(Data$treatment,
+                        levels=unique(Data$treatment))
+
+Data$plot       = factor(Data$plot,
+                         levels=unique(Data$plot))
+
+Data$Growth_morphology = factor(Data$Growth_morphology,
+                                levels=unique(Data$Growth_morphology))
+
+###  Check the data frame
+
+library(psych)
+headTail(Data)
+str(Data)
+summary(Data)   
+
+### Remove unnecessary objects
+
+library(lme4)
+library(lmerTest)
+
+Growth_morphology_INTER = lmer(rank ~ Growth_morphology*treatment + (1|plot),
+                               data=Data,
+                               REML=TRUE)
+
+
+anova(Growth_morphology_INTER)
+rand(Growth_morphology_INTER)
+
+#posthoc analysis 
+
+library(multcompView)
+library(lsmeans)
+
+emm <- emmeans(Growth_morphology_INTER, ~ Growth_morphology:treatment) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 100000)        # Change global options
+
+write.table(pairs_emm, file="Growth_morphology_INTER.csv", row.names=F, sep=",")
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                            Sum Sq Mean Sq NumDF   DenDF F value Pr(>F)    
+Growth_morphology           150626 25104.4     6 18410.9 29.0654 <2e-16 ***
+treatment                       82    27.2     3   110.2  0.0315 0.9925    
+Growth_morphology:treatment  13241   735.6    18 18410.9  0.8517 0.6392    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+> rand(Growth_morphology_INTER)
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Growth_morphology + treatment + (1 | plot) + Growth_morphology:treatment
+           npar logLik    AIC    LRT Df Pr(>Chisq)    
+<none>       30 -88618 177296                         
+(1 | plot)   29 -88727 177512 218.05  1  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+###NO SIGNIFICANT DIFFERENCES WITHIN TREATMENTS ASSOCIATED TO MORPHOLOGY 
+
+
+
+------------------------------------------ TROPHIC ALL -----------------------------------
+
+if(!require(psych)){install.packages("psych")}
+if(!require(lme4)){install.packages("lme4")}
+if(!require(lmerTest)){install.packages("lmerTest")}
+if(!require(multcompView)){install.packages("multcompView")}
+if(!require(lsmeans)){install.packages("lsmeans")}
+if(!require(nlme)){install.packages("nlme")}
+if(!require(car)){install.packages("car")}
+if(!require(rcompanion)){install.packages("rcompanion")}
+
+Data <- read.csv("new_rel_abundance_trophic-graph.csv", header = T, sep = ",")
+View(Data)
+
+###  Otherwise, R will alphabetize them
+
+Data$treatment = factor(Data$treatment,
+                        levels=unique(Data$treatment))
+
+Data$plot       = factor(Data$plot,
+                         levels=unique(Data$plot))
+
+Data$location       = factor(Data$location,
+                         levels=unique(Data$location))
+
+Data$Trophic_Mode_Final = factor(Data$Trophic_Mode_Final,
+                                 levels=unique(Data$Trophic_Mode_Final))
+
+###  Check the data frame
+
+library(psych)
+headTail(Data)
+str(Data)
+summary(Data)   
+
+### Remove unnecessary objects
+
+library(lme4)
+library(lmerTest)
+
+model.trophic.ALL = lmer(rank ~ Trophic_Mode_Final*treatment/location + (1|plot),
+                           data=Data,
+                           REML=TRUE)
+
+
+anova(model.trophic.ALL)
+rand(model.trophic.ALL)
+
+#posthoc analysis 
+
+library(multcompView)
+library(lsmeans)
+
+emm <- emmeans(model.trophic.ALL, ~ Trophic_Mode_Final:treatment/location) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 100000)        # Change global options
+
+write.table(pairs_emm, file="Trophic_mode_ALL.csv", row.names=F, sep=",") 
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                                      Sum Sq Mean Sq NumDF DenDF F value    Pr(>F)    
+Trophic_Mode_Final                    148076 24679.4     6 36837  8.1017 9.045e-09 ***
+treatment                               4183  1394.4     3    88  0.4578    0.7125    
+Trophic_Mode_Final:treatment           26342  1463.4    18 36837  0.4804    0.9673    
+Trophic_Mode_Final:treatment:location  95336  3404.9    28 35336  1.1177    0.3042    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+> rand(model.trophic.ALL)
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Trophic_Mode_Final + treatment + (1 | plot) + Trophic_Mode_Final:treatment + Trophic_Mode_Final:treatment:location
+           npar  logLik    AIC    LRT Df Pr(>Chisq)    
+<none>       58 -200454 401024                         
+(1 | plot)   57 -200509 401131 108.59  1  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+##NO SIGNIFICANT DIFFERENCES AT ALL
+
+
+
+----------------------------------------- MORPHOLOGY ALL -----------------------------------
+
+
+Data <- read.csv("new_rel_abundance_trophic-graph.csv", header = T, sep = ",")
+View(Data)
+
+###  Otherwise, R will alphabetize them
+
+Data$treatment = factor(Data$treatment,
+                        levels=unique(Data$treatment))
+
+Data$plot       = factor(Data$plot,
+                         levels=unique(Data$plot))
+
+Data$location       = factor(Data$location,
+                             levels=unique(Data$location))
+
+Data$Trophic_Mode_Final = factor(Data$Trophic_Mode_Final,
+                                 levels=unique(Data$Trophic_Mode_Final))
+
+###  Check the data frame
+
+library(psych)
+headTail(Data)
+str(Data)
+summary(Data)   
+
+### Remove unnecessary objects
+
+library(lme4)
+library(lmerTest)
+
+Growth_morphology_ALL = lmer(rank ~ Growth_morphology*treatment/location + (1|plot),
+                               data=Data,
+                               REML=TRUE)
+
+
+anova(Growth_morphology_ALL)
+rand(Growth_morphology_ALL)
+
+#posthoc analysis 
+
+library(multcompView)
+library(lsmeans)
+
+emm <- emmeans(Growth_morphology_ALL, ~ Growth_morphology:treatment/location) 
+
+pairs_emm <- pairs(emm) 
+options(max.print = 100000)        # Change global options
+
+write.table(pairs_emm, file="Growth_morphology_ALL.csv", row.names=F, sep=",")
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                                     Sum Sq Mean Sq NumDF DenDF F value    Pr(>F)    
+Growth_morphology                    502442   83740     6 36837 27.8840 < 2.2e-16 ***
+treatment                              2577     859     3   624  0.2861    0.8355    
+Growth_morphology:treatment           48139    2674    18 36837  0.8905    0.5905    
+Growth_morphology:treatment:location 250149    8934    28 34845  2.9748 2.186e-07 ***
+
+
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+> rand(Growth_morphology_ALL)
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+rank ~ Growth_morphology + treatment + (1 | plot) + Growth_morphology:treatment + Growth_morphology:treatment:location
+           npar  logLik    AIC    LRT Df Pr(>Chisq)    
+<none>       58 -200179 400474                         
+(1 | plot)   57 -200235 400583 111.06  1  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#### THREE WAY INTERACTION BETWEEN MORPHOLOGY, TREATMENT AND LOCATION, BUT THEN DIFFERENCES ARE DRIVEN BY LOCATION 
+#### NO SIGNIFICANT DIFFERENCES WITHIN LOCATION ASSOCIATED TO SAME MORPHOLOGY IN RESPONSE TO TREATMENT 
+
+
+--------------------------------ORDER ALL--------------------------------------------
+
+plot_ranks <- read.csv("plot_ranks.csv", header = T, sep = ",")
+
+model.Order <- lmer(Rel_abundance_ranked ~ Order*treatment/location + (1|plot),
+                    data= plot_ranks)
+anova(model.Order)
+summary < anova(model.Order)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                          Sum Sq Mean Sq NumDF   DenDF F value    Pr(>F)    
+Order                    2643153   88105    30 31388.4 27.6589 < 2.2e-16 ***
+treatment                   1033     344     3   242.2  0.1081    0.9553    
+Order:treatment           111412    1238    90 31388.4  0.3886    1.0000    
+Order:treatment:location  707416    5705   124 31239.2  1.7910 1.647e-07 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+Rel_abundance_ranked ~ Order + treatment + (1 | plot) + Order:treatment + Order:treatment:location
+           npar  logLik    AIC    LRT Df Pr(>Chisq)    
+<none>      250 -171878 344256                         
+(1 | plot)  249 -171926 344349 95.278  1  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+--------------------------------FAMILY ALL--------------------------------------------
+
+plot_ranks <- read.csv("plot_ranks.csv", header = T, sep = ",")
+
+model.Family <- lmer(Rel_abundance_ranked ~ Family*treatment/location + (1|plot),
+                    data= plot_ranks)
+anova(model.Family)
+summary < anova(model.Family)
+
+rand(model.Family)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                           Sum Sq Mean Sq NumDF   DenDF F value Pr(>F)    
+Family                    2718881   41829    65 29668.0 12.6203 <2e-16 ***
+treatment                    2554     851     3   131.6  0.2569 0.8563    
+Family:treatment           197206    1011   195 29668.0  0.3051 1.0000    
+Family:treatment:location  850179    3220   264 29655.5  0.9716 0.6175    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+ANOVA-like table for random-effects: Single term deletions
+
+Model:
+Rel_abundance_ranked ~ Family + treatment + (1 | plot) + Family:treatment + Family:treatment:location
+           npar  logLik    AIC    LRT Df Pr(>Chisq)    
+<none>      530 -163481 328022                         
+(1 | plot)  529 -163525 328107 87.511  1  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+--------------------------------GENUS ALL--------------------------------------------
+
+plot_ranks <- read.csv("plot_ranks.csv", header = T, sep = ",")
+
+model.Genus <- lmer(Rel_abundance_ranked ~ Genus*treatment/location + (1|plot),
+                     data= plot_ranks)
+anova(model.Genus)
+summary <- anova(model.Genus)
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                          Sum Sq Mean Sq NumDF   DenDF F value Pr(>F)
+Genus                    3207717   35250    91 24997.8 10.2057 <2e-16
+treatment                   3780    1260     3   107.4  0.3648 0.7785
+Genus:treatment           317267    1162   273 24997.8  0.3365 1.0000
+Genus:treatment:location 1348963    3666   368 24979.4  1.0613 0.2025
